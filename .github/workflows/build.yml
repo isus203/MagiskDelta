@@ -1,4 +1,5 @@
 name: Magisk Build
+
 on:
   push:
     branches: [ master ]
@@ -23,7 +24,6 @@ jobs:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
     env:
-      # Настройки для CCACHE и SCCACHE
       NDK_CCACHE: ccache
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPILERCHECK: prefix,content
@@ -33,8 +33,13 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          submodules: 'false' # <-- ИЗМЕНЕНИЕ 1: Отключаем автоматический check out субмодулей
           fetch-depth: 0
+
+      - name: Initialize and Update Submodules # <-- ИЗМЕНЕНИЕ 2: Явно обновляем субмодули
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive --force
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -47,10 +52,14 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Rust toolchain # Установка Rust для cxxbridge-cmd
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          
+      - name: Manually Install cxxbridge-cmd # <-- ИЗМЕНЕНИЕ 3: Принудительная установка инструмента
+        run: |
+          cargo install --path native/src/external/cxx-rs/gen/cmd --force
           
       - name: Configure and restore Ccache
         id: ccache-cache
@@ -90,188 +99,38 @@ jobs:
         run: |
           python build.py -v all
 
-      # Только загружаем артефакты, собранные на Linux
       - name: Upload build artifact
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          # Имя артефакта, специфичное для этого коммита
           name: Magisk-Build-Artifact-${{ github.sha }} 
           path: out
-          
-# ----------------------------------------------------------------------------------------------------------------------
 
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    # Запускается только после успешного завершения job 'build'
     needs: build 
-    # Запускается только при push в ветку master или ручном запуске (workflow_dispatch)
     if: success() && (github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch')
     
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          # Скачиваем артефакт, загруженный Linux-билдом
           name: Magisk-Build-Artifact-${{ github.sha }}
           path: release_artifacts
 
       - name: Create Release
-        # Используем популярный action для создания релиза
         uses: softprops/action-gh-release@v1
         with:
-          # Используем короткий SHA коммита как тег и имя релиза
           tag_name: "BUILD-${{ github.sha }}"
           name: "Magisk Build ${{ github.sha }}"
-          # Автоматическое тело релиза
           body: |
             Автоматическая сборка из коммита:
             ${{ github.sha }}
             
             [Просмотреть коммит](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
-          # Прикрепляем все файлы из скачанного артефакта
           files: release_artifacts/*
-          # Создать черновик релиза (Draft). Черновик не будет публичным, пока вы не опубликуете его вручную.
           draft: true 
         env:
-          # Токен доступа, предоставляется GitHub по умолчанию
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          submodules: 'recursive'
-          fetch-depth: 0
-
-      - name: Set up JDK 17
-        # Используем actions/setup-java@v4
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Set up Python 3
-        # Используем actions/setup-python@v5
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Configure and restore Ccache
-        # Используем actions/cache@v4 для ccache, как рекомендовано для сложных кэшей
-        id: ccache-cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-ccache-
-            ${{ runner.os }}-ccache-
-
-      - name: Configure and restore Sccache
-        # Используем actions/cache@v4 для sccache
-        id: sccache-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/sccache
-          key: ${{ runner.os }}-sccache-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-sccache-
-            ${{ runner.os }}-sccache-
-
-      - name: Cache Gradle dependencies
-        # Используем actions/cache@v4
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          # Улучшаем ключ, чтобы он зависел от хэша всех файлов сборки Gradle
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', 'buildSrc/**') }}
-          restore-keys: ${{ runner.os }}-gradle-
-
-      # Кэш сборки Gradle автоматически управляется и не требует отдельного шага actions/cache.
-      # Gradle сам восстанавливает build-cache в папке ~/.gradle/caches/build-cache-*. 
-      # Мы убираем отдельный шаг для 'build-cache', так как он часто не нужен и может быть избыточен.
-
-      - name: Set up NDK
-        # Здесь нет изменений, так как это кастомная логика сборки
-        run: python build.py -v ndk
-
-      - name: Build release
-        # Здесь нет изменений
-        run: |
-          python build.py -vr all
-
-      - name: Build debug
-        # Здесь нет изменений
-        run: |
-          python build.py -v all
-
-      # Только загружаем артефакты, собранные на Linux
-      - name: Upload build artifact
-        if: runner.os == 'Linux'
-        # Используем actions/upload-artifact@v4
-        uses: actions/upload-artifact@v4
-        with:
-          name: Magisk-Build-Artifact-${{ github.sha }}
-          path: out
-          fetch-depth: 0
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Set up Python 3
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ runner.os }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}
-
-      - name: Set up sccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          variant: sccache
-          key: ${{ runner.os }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}
-
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            !~/.gradle/caches/build-cache-*
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts') }}
-          restore-keys: ${{ runner.os }}-gradle-
-
-      - name: Cache build cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches/build-cache-*
-          key: ${{ runner.os }}-build-cache-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-build-cache-
-
-      - name: Set up NDK
-        run: python build.py -v ndk
-
-      - name: Build release
-        run: |
-          python build.py -vr all
-
-      - name: Build debug
-        run: |
-          python build.py -v all
-
-      # Only upload artifacts built on Linux
-      - name: Upload build artifact
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ github.sha }}
-          path: out
+          
