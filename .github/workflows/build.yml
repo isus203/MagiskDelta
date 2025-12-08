@@ -33,10 +33,10 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
         with:
-          submodules: 'false' # <-- ИЗМЕНЕНИЕ 1: Отключаем автоматический check out субмодулей
+          submodules: 'false'
           fetch-depth: 0
 
-      - name: Initialize and Update Submodules # <-- ИЗМЕНЕНИЕ 2: Явно обновляем субмодули
+      - name: Initialize and Update Submodules
         run: |
           git submodule sync --recursive
           git submodule update --init --recursive --force
@@ -57,8 +57,14 @@ jobs:
         with:
           toolchain: stable
           
-      - name: Manually Install cxxbridge-cmd # <-- ИЗМЕНЕНИЕ 3: Принудительная установка инструмента
+      - name: Install Sccache # <-- ДОБАВЛЕНО ИСПРАВЛЕНИЕ: Установка sccache
         run: |
+          cargo install sccache --force
+          
+      - name: Manually Install cxxbridge-cmd
+        run: |
+          # Этот шаг теперь должен работать, так как sccache установлен и находится в PATH,
+          # а Rust toolchain настроен.
           cargo install --path native/src/external/cxx-rs/gen/cmd --force
           
       - name: Configure and restore Ccache
