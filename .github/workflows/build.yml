@@ -32,10 +32,8 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive' # Возвращаем на 'recursive' для других субмодулей
+          submodules: 'recursive'
           fetch-depth: 0
-
-      # Шаги Initialize and Update Submodules и Verify удалены
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -55,14 +53,10 @@ jobs:
           
       - name: Add Cargo Bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          
-      - name: Install Sccache 
+
+      - name: Install Rust Dependencies (sccache & cxxbridge-cmd) # <-- Устанавливаем все инструменты Rust сразу
         run: |
           cargo install sccache --force
-          
-      - name: Install cxxbridge-cmd from Crates.io # <-- НОВОЕ ИСПРАВЛЕНИЕ
-        run: |
-          # Устанавливаем необходимый инструмент глобально, минуя проблему с локальным каталогом
           cargo install cxxbridge-cmd --force 
           
       - name: Configure and restore Ccache
