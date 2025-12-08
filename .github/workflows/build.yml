@@ -35,13 +35,14 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 0
 
-      - name: Clone Missing cxx-rs Repository
+      - name: Clone Missing cxx-rs Repository 🩹
         shell: bash
         run: |
           REQUIRED_PATH="native/src/external/cxx-rs"
           if [ ! -d "$REQUIRED_PATH" ]; then
             echo "Cloning cxx-rs into '$REQUIRED_PATH' to satisfy build script requirement."
             mkdir -p native/src/external
+            # Клонируем cxx, который содержит cxx-rs
             git clone --depth 1 https://github.com/dtolnay/cxx/ "$REQUIRED_PATH"
           else
             echo "cxx-rs directory already exists."
@@ -58,20 +59,20 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Rust toolchain (REQUIRED 1.82+) # <-- ФИКСИРОВАННАЯ ВЕРСИЯ RUST
+      - name: Install Rust toolchain (REQUIRED 1.85.0+) ✅
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.78.0 # Указываем версию, которая гарантированно новее 1.82+
-          # Необязательно, но полезно для NDK-сборок
-          target: aarch64-unknown-linux-gnu,armv7-unknown-linux-gnueabihf,x86_64-unknown-linux-gnu,i686-unknown-linux-gnu
-          override: true
+          # Используем 'stable' с принудительным переопределением, чтобы гарантировать последнюю версию Rust
+          toolchain: stable 
+          override: true 
           
       - name: Add Cargo Bin to PATH
         shell: bash
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Install Sccache 
+      - name: Install Sccache 🚀 
         run: |
+          # Теперь последняя версия sccache должна установиться, т.к. Rust >= 1.85.0
           cargo install sccache --force
           
       - name: Configure and restore Ccache
@@ -122,6 +123,8 @@ jobs:
         with:
           name: Magisk-Build-Artifact-${{ github.sha }} 
           path: out
+
+---
 
   release:
     name: Create GitHub Release
