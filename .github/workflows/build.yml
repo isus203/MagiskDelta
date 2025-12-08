@@ -57,14 +57,15 @@ jobs:
         with:
           toolchain: stable
           
-      - name: Install Sccache # <-- ДОБАВЛЕНО ИСПРАВЛЕНИЕ: Установка sccache
+      - name: Add Cargo Bin to PATH # <-- НОВОЕ ИСПРАВЛЕНИЕ: Добавление каталога Cargo в PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          
+      - name: Install Sccache 
         run: |
           cargo install sccache --force
           
       - name: Manually Install cxxbridge-cmd
         run: |
-          # Этот шаг теперь должен работать, так как sccache установлен и находится в PATH,
-          # а Rust toolchain настроен.
           cargo install --path native/src/external/cxx-rs/gen/cmd --force
           
       - name: Configure and restore Ccache
