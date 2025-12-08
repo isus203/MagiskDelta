@@ -27,8 +27,8 @@ jobs:
       NDK_CCACHE: ccache
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPILERCHECK: prefix,content
-      RUSTC_WRAPPER: sccache
-
+      # RUSTC_WRAPPER: sccache # <-- УДАЛЕНО ИЗ ГЛОБАЛЬНОЙ СЕКЦИИ
+      
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -57,15 +57,17 @@ jobs:
         with:
           toolchain: stable
           
-      - name: Add Cargo Bin to PATH # <-- НОВОЕ ИСПРАВЛЕНИЕ: Добавление каталога Cargo в PATH
+      - name: Add Cargo Bin to PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           
       - name: Install Sccache 
         run: |
+          # Установка теперь должна работать, так как RUSTC_WRAPPER не активен
           cargo install sccache --force
           
       - name: Manually Install cxxbridge-cmd
         run: |
+          # Установка cxxbridge-cmd также должна работать без RUSTC_WRAPPER
           cargo install --path native/src/external/cxx-rs/gen/cmd --force
           
       - name: Configure and restore Ccache
@@ -98,11 +100,15 @@ jobs:
       - name: Set up NDK
         run: python build.py -v ndk
 
-      - name: Build release
+      - name: Build release (with Sccache) # <-- Включаем Sccache здесь
+        env:
+          RUSTC_WRAPPER: sccache
         run: |
           python build.py -vr all
 
-      - name: Build debug
+      - name: Build debug (with Sccache) # <-- И здесь
+        env:
+          RUSTC_WRAPPER: sccache
         run: |
           python build.py -v all
 
