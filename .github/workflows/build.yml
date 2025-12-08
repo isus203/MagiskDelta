@@ -58,11 +58,13 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Rust toolchain (REQUIRED 1.82+) # <-- ОБНОВЛЕНО
+      - name: Install Rust toolchain (REQUIRED 1.82+) # <-- ФИКСИРОВАННАЯ ВЕРСИЯ RUST
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true # Принудительная установка последней стабильной версии
+          toolchain: 1.78.0 # Указываем версию, которая гарантированно новее 1.82+
+          # Необязательно, но полезно для NDK-сборок
+          target: aarch64-unknown-linux-gnu,armv7-unknown-linux-gnueabihf,x86_64-unknown-linux-gnu,i686-unknown-linux-gnu
+          override: true
           
       - name: Add Cargo Bin to PATH
         shell: bash
