@@ -24,9 +24,11 @@ jobs:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
     env:
+      # Использование CCACHE и SCCACHE для ускорения компиляции
       NDK_CCACHE: ccache
       CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      # Рекомендованный способ проверки компилятора для ccache
+      CCACHE_COMPILERCHECK: prefix,content
       RUSTC_WRAPPER: sccache
 
     steps:
@@ -34,6 +36,80 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        # Используем actions/setup-java@v4
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Python 3
+        # Используем actions/setup-python@v5
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Configure and restore Ccache
+        # Используем actions/cache@v4 для ccache, как рекомендовано для сложных кэшей
+        id: ccache-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+            ${{ runner.os }}-ccache-
+
+      - name: Configure and restore Sccache
+        # Используем actions/cache@v4 для sccache
+        id: sccache-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sccache
+          key: ${{ runner.os }}-sccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-sccache-
+            ${{ runner.os }}-sccache-
+
+      - name: Cache Gradle dependencies
+        # Используем actions/cache@v4
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          # Улучшаем ключ, чтобы он зависел от хэша всех файлов сборки Gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', 'buildSrc/**') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      # Кэш сборки Gradle автоматически управляется и не требует отдельного шага actions/cache.
+      # Gradle сам восстанавливает build-cache в папке ~/.gradle/caches/build-cache-*. 
+      # Мы убираем отдельный шаг для 'build-cache', так как он часто не нужен и может быть избыточен.
+
+      - name: Set up NDK
+        # Здесь нет изменений, так как это кастомная логика сборки
+        run: python build.py -v ndk
+
+      - name: Build release
+        # Здесь нет изменений
+        run: |
+          python build.py -vr all
+
+      - name: Build debug
+        # Здесь нет изменений
+        run: |
+          python build.py -v all
+
+      # Только загружаем артефакты, собранные на Linux
+      - name: Upload build artifact
+        if: runner.os == 'Linux'
+        # Используем actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4
+        with:
+          name: Magisk-Build-Artifact-${{ github.sha }}
+          path: out
           fetch-depth: 0
 
       - name: Set up JDK 17
