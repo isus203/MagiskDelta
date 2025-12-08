@@ -35,13 +35,13 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 0
 
-      - name: Clone Missing cxx-rs Repository # <-- РЕШЕНИЕ: Клонируем отсутствующий репозиторий
+      - name: Clone Missing cxx-rs Repository
+        shell: bash
         run: |
           REQUIRED_PATH="native/src/external/cxx-rs"
           if [ ! -d "$REQUIRED_PATH" ]; then
             echo "Cloning cxx-rs into '$REQUIRED_PATH' to satisfy build script requirement."
             mkdir -p native/src/external
-            # Клонируем репозиторий cxx (содержит cxx-rs) в ожидаемое место
             git clone --depth 1 https://github.com/dtolnay/cxx/ "$REQUIRED_PATH"
           else
             echo "cxx-rs directory already exists."
@@ -58,20 +58,19 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Rust toolchain
+      - name: Install Rust toolchain (REQUIRED 1.82+) # <-- ОБНОВЛЕНО
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          override: true # Принудительная установка последней стабильной версии
           
       - name: Add Cargo Bin to PATH
+        shell: bash
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install Sccache 
         run: |
           cargo install sccache --force
-          
-      # Шаг с установкой cxxbridge-cmd из crates.io удален.
-      # Теперь build.py установит его сам из локально склонированных исходников.
           
       - name: Configure and restore Ccache
         id: ccache-cache
