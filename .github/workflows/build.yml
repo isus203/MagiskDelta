@@ -24,16 +24,120 @@ jobs:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
     env:
-      # Использование CCACHE и SCCACHE для ускорения компиляции
+      # Настройки для CCACHE и SCCACHE
       NDK_CCACHE: ccache
       CCACHE_DIR: ${{ github.workspace }}/.ccache
-      # Рекомендованный способ проверки компилятора для ccache
       CCACHE_COMPILERCHECK: prefix,content
       RUSTC_WRAPPER: sccache
 
     steps:
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Rust toolchain # Установка Rust для cxxbridge-cmd
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          
+      - name: Configure and restore Ccache
+        id: ccache-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      - name: Configure and restore Sccache
+        id: sccache-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sccache
+          key: ${{ runner.os }}-sccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-sccache-
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', 'buildSrc/**') }}
+          restore-keys: ${{ runner.os }}-gradle-
+      
+      - name: Set up NDK
+        run: python build.py -v ndk
+
+      - name: Build release
+        run: |
+          python build.py -vr all
+
+      - name: Build debug
+        run: |
+          python build.py -v all
+
+      # Только загружаем артефакты, собранные на Linux
+      - name: Upload build artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          # Имя артефакта, специфичное для этого коммита
+          name: Magisk-Build-Artifact-${{ github.sha }} 
+          path: out
+          
+# ----------------------------------------------------------------------------------------------------------------------
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    # Запускается только после успешного завершения job 'build'
+    needs: build 
+    # Запускается только при push в ветку master или ручном запуске (workflow_dispatch)
+    if: success() && (github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch')
+    
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          # Скачиваем артефакт, загруженный Linux-билдом
+          name: Magisk-Build-Artifact-${{ github.sha }}
+          path: release_artifacts
+
+      - name: Create Release
+        # Используем популярный action для создания релиза
+        uses: softprops/action-gh-release@v1
+        with:
+          # Используем короткий SHA коммита как тег и имя релиза
+          tag_name: "BUILD-${{ github.sha }}"
+          name: "Magisk Build ${{ github.sha }}"
+          # Автоматическое тело релиза
+          body: |
+            Автоматическая сборка из коммита:
+            ${{ github.sha }}
+            
+            [Просмотреть коммит](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          # Прикрепляем все файлы из скачанного артефакта
+          files: release_artifacts/*
+          # Создать черновик релиза (Draft). Черновик не будет публичным, пока вы не опубликуете его вручную.
+          draft: true 
+        env:
+          # Токен доступа, предоставляется GitHub по умолчанию
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           submodules: 'recursive'
           fetch-depth: 0
