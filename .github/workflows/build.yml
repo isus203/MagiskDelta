@@ -24,22 +24,35 @@ jobs:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
     env:
+      # Настройки для CCACHE и NDK
       NDK_CCACHE: ccache
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPILERCHECK: prefix,content
-      # RUSTC_WRAPPER: sccache # <-- УДАЛЕНО ИЗ ГЛОБАЛЬНОЙ СЕКЦИИ
-      
+      # RUSTC_WRAPPER удален из глобального env, чтобы избежать конфликтов при установке
+
     steps:
       - name: Check out
         uses: actions/checkout@v4
         with:
-          submodules: 'false'
+          submodules: 'false' # Отключаем автоматический checkout
           fetch-depth: 0
 
-      - name: Initialize and Update Submodules
+      - name: Initialize and Update Submodules # Принудительное обновление субмодулей
         run: |
           git submodule sync --recursive
           git submodule update --init --recursive --force
+
+      - name: Verify cxx-rs Directory Exists # Диагностика: проверяем, присутствует ли каталог
+        run: |
+          REQUIRED_PATH="native/src/external/cxx-rs/gen/cmd"
+          if [ -d "$REQUIRED_PATH" ]; then
+            echo "Directory '$REQUIRED_PATH' found. Proceeding."
+          else
+            echo "::error::Directory '$REQUIRED_PATH' NOT FOUND. Submodule initialization failed or path is incorrect."
+            echo "Listing contents of native/src/external/:"
+            ls -al native/src/external/
+            exit 1 
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -57,17 +70,17 @@ jobs:
         with:
           toolchain: stable
           
-      - name: Add Cargo Bin to PATH
+      - name: Add Cargo Bin to PATH # Добавляем $HOME/.cargo/bin в PATH
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           
       - name: Install Sccache 
         run: |
-          # Установка теперь должна работать, так как RUSTC_WRAPPER не активен
+          # Установка без активного RUSTC_WRAPPER
           cargo install sccache --force
           
       - name: Manually Install cxxbridge-cmd
         run: |
-          # Установка cxxbridge-cmd также должна работать без RUSTC_WRAPPER
+          # Установка инструмента, необходима для сборки
           cargo install --path native/src/external/cxx-rs/gen/cmd --force
           
       - name: Configure and restore Ccache
@@ -100,13 +113,13 @@ jobs:
       - name: Set up NDK
         run: python build.py -v ndk
 
-      - name: Build release (with Sccache) # <-- Включаем Sccache здесь
+      - name: Build release (with Sccache) # Активируем Sccache здесь
         env:
           RUSTC_WRAPPER: sccache
         run: |
           python build.py -vr all
 
-      - name: Build debug (with Sccache) # <-- И здесь
+      - name: Build debug (with Sccache) # И здесь
         env:
           RUSTC_WRAPPER: sccache
         run: |
@@ -119,6 +132,8 @@ jobs:
           name: Magisk-Build-Artifact-${{ github.sha }} 
           path: out
 
+---
+  
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
