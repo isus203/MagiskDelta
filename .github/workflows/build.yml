@@ -1,5 +1,4 @@
 name: Magisk Build
-
 on:
   push:
     branches: [ master ]
